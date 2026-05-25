@@ -28,7 +28,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Maya-AQSS/shared-sidebar-react.git"
+    "url": "git+https://github.com/Maya-AQSS/maya_platform.git",
+    "directory": "packages/js/shared-sidebar-react"
   },
   "publishConfig": {
     "access": "public"
