@@ -17,7 +17,9 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-i18next": "^17.0.0",
-    "i18next": "^26.0.0"
+    "i18next": "^26.0.0",
+    "@maya/shared-auth-react": "workspace:*",
+    "@maya/shared-layout-react": "workspace:*"
   },
   "scripts": {
     "build": "echo \"source-only library \u2014 no build step\"",
