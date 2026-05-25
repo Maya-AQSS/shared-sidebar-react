@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { useSidebarCollapsed } from '@maya/shared-layout-react'
+import { useSidebarCollapsed } from '@ceedcv-maya/shared-layout-react'
 import { useSharedFavorites, type UseSharedFavoritesOptions } from './useSharedFavorites'
 import { getAppIcon } from './appIcons'
 

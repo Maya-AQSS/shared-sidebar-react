@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useAuth } from '@maya/shared-auth-react'
+import { useAuth } from '@ceedcv-maya/shared-auth-react'
 import { subscribeToFavoritesChanges } from './favoritesBus'
 
 export interface SharedFavorite {
@@ -21,7 +21,7 @@ export interface UseSharedFavoritesOptions {
    */
   dashboardApiUrl: string
   /**
-   * Optional overrides for apps that do not use @maya/shared-auth-react
+   * Optional overrides for apps that do not use @ceedcv-maya/shared-auth-react
    * (e.g. DMS uses its own OIDC hook). If omitted, the values are read
    * from the AuthContext.
    */

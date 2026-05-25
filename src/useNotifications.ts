@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useAuth } from '@maya/shared-auth-react'
+import { useAuth } from '@ceedcv-maya/shared-auth-react'
 
 export interface SharedNotification {
   id: number
