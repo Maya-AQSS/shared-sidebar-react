@@ -26,6 +26,26 @@ This package expects the following sibling packages to be installed by the consu
 - `@ceedcv-maya/shared-auth-react`
 - `@ceedcv-maya/shared-layout-react`
 
+## Styling — required setup
+
+This package uses Tailwind v4 utility classes and design tokens (`bg-odoo-purple`, `bg-ui-card`, `text-text-primary`, …) defined in [`@ceedcv-maya/shared-styles`](https://www.npmjs.com/package/@ceedcv-maya/shared-styles). Without it the components will render unstyled.
+
+```bash
+npm install @ceedcv-maya/shared-styles
+```
+
+```css
+/* src/index.css */
+@import "tailwindcss";
+@import "@ceedcv-maya/shared-styles";
+
+/* Tailwind v4 must scan the package source so it generates the
+   utility classes used inside this library. */
+@source "../node_modules/@ceedcv-maya/shared-sidebar-react/src/**/*.{ts,tsx}";
+```
+
+If you also consume other `@ceedcv-maya/shared-*-react` packages, add an `@source` line for each of them.
+
 ## TypeScript / build notes
 This package ships TypeScript source (`src/index.ts` as entry). Consumers using Vite or Webpack with `ts-loader` work out of the box. Next.js consumers must add this package to `transpilePackages` in `next.config.js`.
 
