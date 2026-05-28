@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@ceedcv-maya/shared-auth-react'
+import { useNotificationChannel } from './NotificationProvider'
 
 export interface SharedNotification {
   id: number
@@ -28,15 +29,37 @@ function useAuthSafe() {
   }
 }
 
+function useNotificationChannelSafe() {
+  try {
+    return useNotificationChannel()
+  } catch {
+    return { channel: null, wsConnected: false }
+  }
+}
+
 /**
  * Fetches the latest notifications for the current user from the maya_dashboard
  * backend. The list and the unread count are exposed together so a <Bell/>
  * component can render a badge without a second round-trip.
+ *
+ * Si `NotificationProvider` está en el árbol y `VITE_REVERB_*` está configurado,
+ * se suscribe al canal WebSocket `private-notifications.{userId}` en vez de
+ * hacer polling. La carga inicial siempre usa HTTP para hidratar la lista.
+ * El fallback a polling HTTP es automático cuando no hay WebSocket disponible.
+ *
+ * La interfaz externa del hook NO cambia (retrocompatibilidad garantizada).
  */
-export function useNotifications({ dashboardApiUrl, pollMs = 60_000, token: tokenOverride, userSub: userSubOverride }: UseNotificationsOptions) {
+export function useNotifications({
+  dashboardApiUrl,
+  pollMs = 60_000,
+  token: tokenOverride,
+  userSub: userSubOverride,
+}: UseNotificationsOptions) {
   const auth = useAuthSafe()
   const token = tokenOverride ?? auth?.token ?? null
   const userSub = userSubOverride ?? auth?.user?.sub ?? null
+
+  const { channel, wsConnected } = useNotificationChannelSafe()
 
   const [notifications, setNotifications] = useState<SharedNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -74,30 +97,89 @@ export function useNotifications({ dashboardApiUrl, pollMs = 60_000, token: toke
 
   fetchRef.current = refetch
 
+  // Carga inicial siempre por HTTP (hidrata la lista antes de que llegue el primer evento WS).
   useEffect(() => {
     refetch()
   }, [refetch])
 
+  // Polling HTTP — solo activo cuando NO hay WebSocket disponible.
   useEffect(() => {
+    if (wsConnected) return
     if (!pollMs || pollMs <= 0) return
     const id = setInterval(() => { fetchRef.current() }, pollMs)
     return () => clearInterval(id)
-  }, [pollMs])
+  }, [pollMs, wsConnected])
 
-  const markRead = useCallback(async (id: number) => {
-    if (!token || !dashboardApiUrl) return
-    const base = dashboardApiUrl.replace(/\/$/, '')
-    try {
-      const resp = await fetch(`${base}/api/v1/notifications/${id}/read`, {
-        method: 'POST',
-        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
-      })
-      if (resp.ok) {
-        setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n)))
+  // WebSocket — escucha eventos del canal compartido por NotificationProvider.
+  useEffect(() => {
+    if (!channel) return
+
+    // Evento de nueva notificación (nombre del evento broadcast en Laravel)
+    channel.listen('.notification.created', (data: unknown) => {
+      const notification = data as { notification?: SharedNotification } | SharedNotification
+      const n: SharedNotification | undefined =
+        'notification' in (notification as object)
+          ? (notification as { notification: SharedNotification }).notification
+          : (notification as SharedNotification)
+      if (n?.id != null) {
+        setNotifications((prev) => {
+          if (prev.some((existing) => existing.id === n.id)) return prev
+          return [n, ...prev]
+        })
+        if (!n.read_at) {
+          setUnreadCount((c) => c + 1)
+        }
+      }
+    })
+
+    // Evento de notificación marcada como leída
+    channel.listen('.notification.read', (data: unknown) => {
+      const payload = data as { id?: number }
+      if (payload.id != null) {
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.id === payload.id ? { ...n, read_at: new Date().toISOString() } : n,
+          ),
+        )
         setUnreadCount((c) => Math.max(0, c - 1))
       }
-    } catch { /* no-op */ }
-  }, [token, dashboardApiUrl])
+    })
+
+    // Evento de "marcar todo como leído"
+    channel.listen('.notification.all-read', () => {
+      const now = new Date().toISOString()
+      setNotifications((prev) => prev.map((n) => (n.read_at ? n : { ...n, read_at: now })))
+      setUnreadCount(0)
+    })
+
+    return () => {
+      channel.stopListening('.notification.created')
+      channel.stopListening('.notification.read')
+      channel.stopListening('.notification.all-read')
+    }
+  }, [channel])
+
+  const markRead = useCallback(
+    async (id: number) => {
+      if (!token || !dashboardApiUrl) return
+      const base = dashboardApiUrl.replace(/\/$/, '')
+      try {
+        const resp = await fetch(`${base}/api/v1/notifications/${id}/read`, {
+          method: 'POST',
+          headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+        })
+        if (resp.ok) {
+          setNotifications((prev) =>
+            prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n)),
+          )
+          setUnreadCount((c) => Math.max(0, c - 1))
+        }
+      } catch {
+        /* no-op */
+      }
+    },
+    [token, dashboardApiUrl],
+  )
 
   const markAllRead = useCallback(async () => {
     if (!token || !dashboardApiUrl) return
@@ -112,7 +194,9 @@ export function useNotifications({ dashboardApiUrl, pollMs = 60_000, token: toke
         setNotifications((prev) => prev.map((n) => (n.read_at ? n : { ...n, read_at: now })))
         setUnreadCount(0)
       }
-    } catch { /* no-op */ }
+    } catch {
+      /* no-op */
+    }
   }, [token, dashboardApiUrl])
 
   return { notifications, unreadCount, refetch, markRead, markAllRead }
