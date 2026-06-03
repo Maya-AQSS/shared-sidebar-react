@@ -37,6 +37,43 @@ function useNotificationChannelSafe() {
   }
 }
 
+/** Lista paginada del dashboard: `{ data: Notification[], ...meta }`. */
+function parseNotificationList(payload: unknown): SharedNotification[] {
+  if (!payload || typeof payload !== 'object') return []
+  const root = payload as Record<string, unknown>
+  const items = root.data
+  if (!Array.isArray(items)) return []
+  return items
+    .filter((row): row is Record<string, unknown> => row != null && typeof row === 'object')
+    .map((row) => ({
+      id: Number(row.id),
+      app: String(row.app ?? ''),
+      type: String(row.type ?? ''),
+      title: String(row.title ?? ''),
+      body: row.body != null ? String(row.body) : '',
+      read_at: row.read_at != null ? String(row.read_at) : null,
+      created_at: String(row.created_at ?? ''),
+      metadata:
+        row.metadata != null && typeof row.metadata === 'object'
+          ? (row.metadata as Record<string, unknown>)
+          : undefined,
+    }))
+    .filter((n) => Number.isFinite(n.id))
+}
+
+/** Contador: envelope `{ data: { unread: number } }` (RespondsWithEnvelope). */
+function parseUnreadCount(payload: unknown): number {
+  if (!payload || typeof payload !== 'object') return 0
+  const root = payload as Record<string, unknown>
+  const nested = root.data
+  if (nested != null && typeof nested === 'object') {
+    const unread = (nested as Record<string, unknown>).unread
+    if (unread != null) return Number(unread)
+  }
+  if (root.unread != null) return Number(root.unread)
+  return 0
+}
+
 /**
  * Fetches the latest notifications for the current user from the maya_dashboard
  * backend. The list and the unread count are exposed together so a <Bell/>
@@ -67,7 +104,7 @@ export function useNotifications({
   const fetchRef = useRef<() => Promise<void>>(async () => {})
 
   const refetch = useCallback(async () => {
-    if (!token || !userSub || !dashboardApiUrl) {
+    if (!token || !dashboardApiUrl) {
       setNotifications([])
       setUnreadCount(0)
       return
@@ -84,16 +121,16 @@ export function useNotifications({
       ])
       if (listResp.ok) {
         const data = await listResp.json()
-        setNotifications(Array.isArray(data?.data) ? data.data : [])
+        setNotifications(parseNotificationList(data))
       }
       if (countResp.ok) {
         const data = await countResp.json()
-        setUnreadCount(Number(data?.unread ?? 0))
+        setUnreadCount(parseUnreadCount(data))
       }
     } catch {
       /* network error — keep previous state */
     }
-  }, [token, userSub, dashboardApiUrl])
+  }, [token, dashboardApiUrl])
 
   fetchRef.current = refetch
 

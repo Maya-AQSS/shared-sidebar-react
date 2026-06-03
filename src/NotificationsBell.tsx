@@ -1,3 +1,4 @@
+import { EditorContentHtml } from '@ceedcv-maya/shared-editor-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNotifications, type UseNotificationsOptions } from './useNotifications'
 
@@ -99,16 +100,20 @@ export function NotificationsBell({
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-text-primary dark:text-text-dark-primary truncate">
-                      {n.title}
-                    </span>
+                    <EditorContentHtml
+                      html={n.title}
+                      className="text-sm font-medium text-text-primary dark:text-text-dark-primary truncate line-clamp-1 min-w-0 [&_p]:inline [&_p]:m-0"
+                    />
                     <span className="text-xs text-text-muted dark:text-text-dark-muted shrink-0">
                       {formatRelative(n.created_at)}
                     </span>
                   </div>
-                  <p className="text-xs text-text-muted dark:text-text-dark-muted mt-0.5 line-clamp-2">
-                    {n.body}
-                  </p>
+                  {n.body ? (
+                    <EditorContentHtml
+                      html={n.body}
+                      className="text-xs text-text-muted dark:text-text-dark-muted mt-0.5 line-clamp-2 [&_p]:m-0"
+                    />
+                  ) : null}
                 </div>
               </button>
             ))}
