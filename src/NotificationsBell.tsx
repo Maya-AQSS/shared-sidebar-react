@@ -1,6 +1,11 @@
 import { EditorContentHtml } from '@ceedcv-maya/shared-editor-react'
 import { useEffect, useRef, useState } from 'react'
-import { useNotifications, type UseNotificationsOptions } from './useNotifications'
+import {
+  useNotifications,
+  type SharedNotification,
+  type SharedNotificationSeverity,
+  type UseNotificationsOptions,
+} from './useNotifications'
 
 export interface NotificationsBellProps extends UseNotificationsOptions {
   /** Label for the dropdown header. Default: "Notificaciones". */
@@ -9,6 +14,21 @@ export interface NotificationsBellProps extends UseNotificationsOptions {
   emptyLabel?: string
   /** Shown on the "mark all read" button. Default: "Marcar todo como leído". */
   markAllLabel?: string
+  /**
+   * Called when a notification is clicked, so the host app routes with its own
+   * router (typically to the notification detail page). If not provided, falls
+   * back to navigating to the notification's `url` resource via window.location.
+   */
+  onNavigate?: (notification: SharedNotification) => void
+}
+
+/** Tailwind dot colour per severity (design-token utility classes). */
+const SEVERITY_DOT: Record<SharedNotificationSeverity, string> = {
+  critical: 'bg-danger',
+  high: 'bg-warning',
+  medium: 'bg-info',
+  low: 'bg-text-muted',
+  info: 'bg-text-muted',
 }
 
 function formatRelative(iso: string): string {
@@ -24,10 +44,20 @@ export function NotificationsBell({
   label = 'Notificaciones',
   emptyLabel = 'Sin notificaciones',
   markAllLabel = 'Marcar todo como leído',
+  onNavigate,
   ...options
 }: NotificationsBellProps) {
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications(options)
   const [open, setOpen] = useState(false)
+
+  const handleSelect = (n: SharedNotification) => {
+    if (!n.read_at) markRead(n.id)
+    setOpen(false)
+    // Host routes (typically to the notification detail). Without a handler,
+    // fall back to the related resource URL.
+    if (onNavigate) onNavigate(n)
+    else if (n.url) window.location.assign(n.url)
+  }
   const rootRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -87,14 +117,14 @@ export function NotificationsBell({
               <button
                 key={n.id}
                 type="button"
-                onClick={() => { if (!n.read_at) markRead(n.id) }}
+                onClick={() => handleSelect(n)}
                 className={`w-full text-left px-3 py-2 border-b border-ui-border dark:border-ui-dark-border transition-colors hover:bg-ui-body dark:hover:bg-ui-dark-bg last:border-b-0 flex gap-2 items-start ${
                   n.read_at ? 'opacity-70' : ''
                 }`}
               >
                 <span
                   className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${
-                    n.read_at ? 'bg-transparent' : 'bg-danger'
+                    n.read_at ? 'bg-transparent' : SEVERITY_DOT[n.severity]
                   }`}
                   aria-hidden="true"
                 />

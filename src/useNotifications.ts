@@ -2,15 +2,27 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@ceedcv-maya/shared-auth-react'
 import { useNotificationChannel } from './NotificationProvider'
 
+export type SharedNotificationSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info'
+
 export interface SharedNotification {
   id: number
   app: string
   type: string
   title: string
   body: string
+  severity: SharedNotificationSeverity
+  url: string | null
   read_at: string | null
   created_at: string
   metadata?: Record<string, unknown>
+}
+
+const SEVERITIES: SharedNotificationSeverity[] = ['critical', 'high', 'medium', 'low', 'info']
+
+function parseSeverity(value: unknown): SharedNotificationSeverity {
+  return SEVERITIES.includes(value as SharedNotificationSeverity)
+    ? (value as SharedNotificationSeverity)
+    : 'info'
 }
 
 export interface UseNotificationsOptions {
@@ -51,6 +63,8 @@ function parseNotificationList(payload: unknown): SharedNotification[] {
       type: String(row.type ?? ''),
       title: String(row.title ?? ''),
       body: row.body != null ? String(row.body) : '',
+      severity: parseSeverity(row.severity),
+      url: row.url != null ? String(row.url) : null,
       read_at: row.read_at != null ? String(row.read_at) : null,
       created_at: String(row.created_at ?? ''),
       metadata:
