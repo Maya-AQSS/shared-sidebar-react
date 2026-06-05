@@ -10,6 +10,12 @@ export interface SharedNotification {
   type: string
   title: string
   body: string
+  /** Clave i18n del título (`notifications.<type>.title`) para re-resolver en cliente. */
+  title_key: string | null
+  /** Clave i18n del cuerpo (`notifications.<type>.body`) para re-resolver en cliente. */
+  body_key: string | null
+  /** Params de interpolación de las claves i18n. */
+  params: Record<string, unknown>
   severity: SharedNotificationSeverity
   url: string | null
   read_at: string | null
@@ -49,6 +55,31 @@ function useNotificationChannelSafe() {
   }
 }
 
+/** Normaliza una fila/payload de notificación, preservando claves i18n + params. */
+function parseNotification(row: Record<string, unknown>): SharedNotification {
+  return {
+    id: Number(row.id),
+    app: String(row.app ?? ''),
+    type: String(row.type ?? ''),
+    title: String(row.title ?? ''),
+    body: row.body != null ? String(row.body) : '',
+    title_key: row.title_key != null ? String(row.title_key) : null,
+    body_key: row.body_key != null ? String(row.body_key) : null,
+    params:
+      row.params != null && typeof row.params === 'object'
+        ? (row.params as Record<string, unknown>)
+        : {},
+    severity: parseSeverity(row.severity),
+    url: row.url != null ? String(row.url) : null,
+    read_at: row.read_at != null ? String(row.read_at) : null,
+    created_at: String(row.created_at ?? ''),
+    metadata:
+      row.metadata != null && typeof row.metadata === 'object'
+        ? (row.metadata as Record<string, unknown>)
+        : undefined,
+  }
+}
+
 /** Lista paginada del dashboard: `{ data: Notification[], ...meta }`. */
 function parseNotificationList(payload: unknown): SharedNotification[] {
   if (!payload || typeof payload !== 'object') return []
@@ -57,21 +88,7 @@ function parseNotificationList(payload: unknown): SharedNotification[] {
   if (!Array.isArray(items)) return []
   return items
     .filter((row): row is Record<string, unknown> => row != null && typeof row === 'object')
-    .map((row) => ({
-      id: Number(row.id),
-      app: String(row.app ?? ''),
-      type: String(row.type ?? ''),
-      title: String(row.title ?? ''),
-      body: row.body != null ? String(row.body) : '',
-      severity: parseSeverity(row.severity),
-      url: row.url != null ? String(row.url) : null,
-      read_at: row.read_at != null ? String(row.read_at) : null,
-      created_at: String(row.created_at ?? ''),
-      metadata:
-        row.metadata != null && typeof row.metadata === 'object'
-          ? (row.metadata as Record<string, unknown>)
-          : undefined,
-    }))
+    .map((row) => parseNotification(row))
     .filter((n) => Number.isFinite(n.id))
 }
 
@@ -167,12 +184,14 @@ export function useNotifications({
 
     // Evento de nueva notificación (nombre del evento broadcast en Laravel)
     channel.listen('.notification.created', (data: unknown) => {
-      const notification = data as { notification?: SharedNotification } | SharedNotification
-      const n: SharedNotification | undefined =
-        'notification' in (notification as object)
-          ? (notification as { notification: SharedNotification }).notification
-          : (notification as SharedNotification)
-      if (n?.id != null) {
+      const envelope = data as { notification?: unknown } | Record<string, unknown>
+      const raw =
+        envelope != null && typeof envelope === 'object' && 'notification' in envelope
+          ? (envelope as { notification: unknown }).notification
+          : envelope
+      if (raw == null || typeof raw !== 'object') return
+      const n = parseNotification(raw as Record<string, unknown>)
+      if (Number.isFinite(n.id)) {
         setNotifications((prev) => {
           if (prev.some((existing) => existing.id === n.id)) return prev
           return [n, ...prev]

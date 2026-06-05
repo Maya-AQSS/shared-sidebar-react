@@ -1,11 +1,65 @@
 import { EditorContentHtml } from '@ceedcv-maya/shared-editor-react'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   useNotifications,
   type SharedNotification,
   type SharedNotificationSeverity,
   type UseNotificationsOptions,
 } from './useNotifications'
+
+/**
+ * Las notificaciones llegan con texto ya renderizado por el backend (en un
+ * locale que NO tiene por qué ser el del usuario) y, además, con la clave i18n
+ * + params. Re-resolvemos en cliente contra el namespace `notifications` para
+ * que siempre se muestren en el idioma activo (sincronizado desde `me.locale`).
+ * Contrato espejo de `App\Support\NotificationContent::resolve` (backend).
+ */
+type LocalizedMap = Record<string, string | undefined>
+
+function useNotificationText() {
+  const { t, i18n } = useTranslation('notifications')
+  const currentLocale = (i18n.resolvedLanguage ?? i18n.language ?? '').split('-')[0]
+  return (
+    key: string | null,
+    fallback: string,
+    params: Record<string, unknown>,
+    localized?: LocalizedMap | null,
+    localizedDefault?: string | null,
+  ): string => {
+    if (key) {
+      const k = key.startsWith('notifications.') ? key.slice('notifications.'.length) : key
+      if (i18n.exists(k, { ns: 'notifications' })) {
+        return t(k, { ns: 'notifications', ...params }) as string
+      }
+    }
+    if (localized) {
+      const hit = localized[currentLocale]
+      if (hit != null && hit !== '') return hit
+      if (localizedDefault) {
+        const fb = localized[localizedDefault]
+        if (fb != null && fb !== '') return fb
+      }
+    }
+    return fallback
+  }
+}
+
+/** Lee metadata.i18n de una notificación de alerta manual (title/body por locale). */
+function readI18nMeta(metadata: Record<string, unknown> | undefined): {
+  title?: LocalizedMap
+  body?: LocalizedMap
+  default?: string
+} {
+  const i18n = metadata?.i18n
+  if (i18n == null || typeof i18n !== 'object') return {}
+  const m = i18n as Record<string, unknown>
+  return {
+    title: (m.title as LocalizedMap | undefined) ?? undefined,
+    body: (m.body as LocalizedMap | undefined) ?? undefined,
+    default: typeof m.default_locale === 'string' ? m.default_locale : undefined,
+  }
+}
 
 export interface NotificationsBellProps extends UseNotificationsOptions {
   /** Label for the dropdown header. Default: "Notificaciones". */
@@ -48,6 +102,7 @@ export function NotificationsBell({
   ...options
 }: NotificationsBellProps) {
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications(options)
+  const resolveText = useNotificationText()
   const [open, setOpen] = useState(false)
 
   const handleSelect = (n: SharedNotification) => {
@@ -113,7 +168,11 @@ export function NotificationsBell({
                 {emptyLabel}
               </div>
             )}
-            {notifications.map((n) => (
+            {notifications.map((n) => {
+              const i18nMeta = readI18nMeta(n.metadata)
+              const title = resolveText(n.title_key, n.title, n.params, i18nMeta.title, i18nMeta.default)
+              const body = resolveText(n.body_key, n.body, n.params, i18nMeta.body, i18nMeta.default)
+              return (
               <button
                 key={n.id}
                 type="button"
@@ -131,22 +190,23 @@ export function NotificationsBell({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <EditorContentHtml
-                      html={n.title}
+                      html={title}
                       className="text-sm font-medium text-text-primary dark:text-text-dark-primary truncate line-clamp-1 min-w-0 [&_p]:inline [&_p]:m-0"
                     />
                     <span className="text-xs text-text-muted dark:text-text-dark-muted shrink-0">
                       {formatRelative(n.created_at)}
                     </span>
                   </div>
-                  {n.body ? (
+                  {body ? (
                     <EditorContentHtml
-                      html={n.body}
+                      html={body}
                       className="text-xs text-text-muted dark:text-text-dark-muted mt-0.5 line-clamp-2 [&_p]:m-0"
                     />
                   ) : null}
                 </div>
               </button>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
