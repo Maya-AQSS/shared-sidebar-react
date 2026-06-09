@@ -20,6 +20,11 @@ type LaravelEchoInstance = {
   disconnect: () => void
 }
 
+/** Constructor de Laravel Echo (peer dep dinámica). */
+type EchoConstructor = new (options: Record<string, unknown>) => LaravelEchoInstance
+/** Clase Pusher (peer dep dinámica); solo se asigna a `window.Pusher`. */
+type PusherClass = new (...args: never[]) => unknown
+
 /**
  * Variables de entorno Reverb (Vite).
  * Si alguna está ausente, el provider cae en modo polling.
@@ -114,16 +119,18 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         // new Function escapa el análisis estático de Vite — laravel-echo y
         // pusher-js son peer deps opcionales que solo existen cuando Reverb
         // está activo. El consumidor los instala; la app host no los necesita.
-        const dynImport = new Function('s', 'return import(s)') as (s: string) => Promise<{ default: unknown }>
+        const dynImport = new Function('s', 'return import(s)') as <T>(s: string) => Promise<{ default: T }>
         const [{ default: Echo }, { default: Pusher }] = await Promise.all([
-          dynImport('laravel-echo'),
-          dynImport('pusher-js'),
+          dynImport<EchoConstructor>('laravel-echo'),
+          dynImport<PusherClass>('pusher-js'),
         ])
 
         if (cancelled) return
 
-        // Asignar Pusher al scope global — requerido por Laravel Echo con driver pusher
-        ;(window as typeof window & { Pusher: typeof Pusher }).Pusher = Pusher
+        // Asignar Pusher al scope global — requerido por Laravel Echo con driver pusher.
+        // Cast vía unknown: es una asignación global en runtime, el tipo es irrelevante
+        // y evita el choque con la augmentación ambiente de `window.Pusher` (pusher-js).
+        ;(window as unknown as { Pusher: unknown }).Pusher = Pusher
 
         const echoInstance = new Echo({
           broadcaster: 'reverb',

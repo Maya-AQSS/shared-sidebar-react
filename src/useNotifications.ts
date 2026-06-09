@@ -121,11 +121,9 @@ export function useNotifications({
   dashboardApiUrl,
   pollMs = 60_000,
   token: tokenOverride,
-  userSub: userSubOverride,
 }: UseNotificationsOptions) {
   const auth = useAuthSafe()
   const token = tokenOverride ?? auth?.token ?? null
-  const userSub = userSubOverride ?? auth?.user?.sub ?? null
 
   const { channel, wsConnected } = useNotificationChannelSafe()
 
