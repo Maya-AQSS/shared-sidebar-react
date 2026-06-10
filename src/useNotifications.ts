@@ -18,6 +18,12 @@ export interface SharedNotification {
   params: Record<string, unknown>
   severity: SharedNotificationSeverity
   url: string | null
+  /**
+   * Frontend que hospeda el recurso de `url` (token peerOrigin: `dms`, `logs`,
+   * `audit`, `dashboard`…). Permite cross-navegar al recurso en SU app cuando se
+   * pulsa la notificación desde otra app. Null → `url` relativa al app actual.
+   */
+  target_app: string | null
   read_at: string | null
   created_at: string
   metadata?: Record<string, unknown>
@@ -71,6 +77,7 @@ function parseNotification(row: Record<string, unknown>): SharedNotification {
         : {},
     severity: parseSeverity(row.severity),
     url: row.url != null ? String(row.url) : null,
+    target_app: row.target_app != null ? String(row.target_app) : null,
     read_at: row.read_at != null ? String(row.read_at) : null,
     created_at: String(row.created_at ?? ''),
     metadata:

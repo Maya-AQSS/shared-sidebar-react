@@ -1,6 +1,7 @@
 import { EditorContentHtml } from '@ceedcv-maya/shared-editor-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { resolveNotificationHref } from './resolveNotificationHref'
 import {
   useNotifications,
   type SharedNotification,
@@ -109,9 +110,15 @@ export function NotificationsBell({
     if (!n.read_at) markRead(n.id)
     setOpen(false)
     // Host routes (typically to the notification detail). Without a handler,
-    // fall back to the related resource URL.
-    if (onNavigate) onNavigate(n)
-    else if (n.url) window.location.assign(n.url)
+    // resolve the resource URL: same-app stays local, cross-app is made absolute
+    // via peerOrigin(target_app) so the resource opens in ITS app (no longer
+    // mis-resolving a foreign relative url against the current app's host).
+    if (onNavigate) {
+      onNavigate(n)
+      return
+    }
+    const href = resolveNotificationHref(n.url, n.target_app, window.location)
+    if (href) window.location.assign(href)
   }
   const rootRef = useRef<HTMLDivElement | null>(null)
 
