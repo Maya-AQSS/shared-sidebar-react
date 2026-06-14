@@ -70,6 +70,18 @@ export interface NotificationsBellProps extends UseNotificationsOptions {
   /** Shown on the "mark all read" button. Default: "Marcar todo como leído". */
   markAllLabel?: string
   /**
+   * Textos del tiempo relativo ("ahora" / "N min" / "N h"). Opcionales: si se
+   * omiten, se resuelven vía `t('relativeTime.*')` (namespace `notifications`)
+   * con fallback en español. `minutes`/`hours` reciben `{{count}}`.
+   */
+  relativeTimeLabels?: {
+    now?: string
+    /** Plantilla con `{{count}}`, p.ej. "{{count}} min". */
+    minutes?: string
+    /** Plantilla con `{{count}}`, p.ej. "{{count}} h". */
+    hours?: string
+  }
+  /**
    * Called when a notification is clicked, so the host app routes with its own
    * router (typically to the notification detail page). If not provided, falls
    * back to navigating to the notification's `url` resource via window.location.
@@ -86,24 +98,42 @@ const SEVERITY_DOT: Record<SharedNotificationSeverity, string> = {
   info: 'bg-text-muted',
 }
 
-function formatRelative(iso: string): string {
-  const d = new Date(iso)
-  const diff = (Date.now() - d.getTime()) / 1000
-  if (diff < 60) return 'ahora'
-  if (diff < 3600) return `${Math.floor(diff / 60)} min`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} h`
-  return d.toLocaleDateString()
+/** Construye el formateador de tiempo relativo con textos resueltos. */
+function makeFormatRelative(texts: { now: string; minutes: (n: number) => string; hours: (n: number) => string }) {
+  return (iso: string): string => {
+    const d = new Date(iso)
+    const diff = (Date.now() - d.getTime()) / 1000
+    if (diff < 60) return texts.now
+    if (diff < 3600) return texts.minutes(Math.floor(diff / 60))
+    if (diff < 86400) return texts.hours(Math.floor(diff / 3600))
+    return d.toLocaleDateString()
+  }
 }
 
 export function NotificationsBell({
   label = 'Notificaciones',
   emptyLabel = 'Sin notificaciones',
   markAllLabel = 'Marcar todo como leído',
+  relativeTimeLabels,
   onNavigate,
   ...options
 }: NotificationsBellProps) {
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications(options)
   const resolveText = useNotificationText()
+  const { t } = useTranslation('notifications')
+  // Tiempo relativo: `relativeTimeLabels` (prop) > `t('relativeTime.*')` > ES.
+  const interp = (tpl: string, count: number) => tpl.replace('{{count}}', String(count))
+  const formatRelative = makeFormatRelative({
+    now: relativeTimeLabels?.now ?? t('relativeTime.now', { defaultValue: 'ahora' }),
+    minutes: (n) =>
+      relativeTimeLabels?.minutes
+        ? interp(relativeTimeLabels.minutes, n)
+        : t('relativeTime.minutes', { count: n, defaultValue: `${n} min` }),
+    hours: (n) =>
+      relativeTimeLabels?.hours
+        ? interp(relativeTimeLabels.hours, n)
+        : t('relativeTime.hours', { count: n, defaultValue: `${n} h` }),
+  })
   const [open, setOpen] = useState(false)
 
   const handleSelect = (n: SharedNotification) => {
